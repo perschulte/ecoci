@@ -1,0 +1,113 @@
+name: Green CI Measurement
+
+on:
+  workflow_call:
+    inputs:
+      command:
+        description: 'Command to measure'
+        required: true
+        type: string
+      working-directory:
+        description: 'Working directory to run the command'
+        required: false
+        type: string
+        default: '.'
+      python-version:
+        description: 'Python version to use'
+        required: false
+        type: string
+        default: '3.11'
+    outputs:
+      energy_kwh:
+        description: 'Energy consumption in kWh'
+        value: ${{ jobs.measure.outputs.energy_kwh }}
+      co2_kg:
+        description: 'CO2 emissions in kg'
+        value: ${{ jobs.measure.outputs.co2_kg }}
+      duration_s:
+        description: 'Duration in seconds'
+        value: ${{ jobs.measure.outputs.duration_s }}
+
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'Command to measure'
+        required: true
+        type: string
+      working-directory:
+        description: 'Working directory to run the command'
+        required: false
+        type: string
+        default: '.'
+      python-version:
+        description: 'Python version to use'
+        required: false
+        type: string
+        default: '3.11'
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    outputs:
+      energy_kwh: ${{ steps.measure.outputs.energy_kwh }}
+      co2_kg: ${{ steps.measure.outputs.co2_kg }}
+      duration_s: ${{ steps.measure.outputs.duration_s }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ inputs.python-version }}
+          
+      - name: Install Green CI
+        run: |
+          cd cli
+          python -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+          pip install -e .
+          
+      - name: Run measurement
+        id: measure
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          cd cli
+          source venv/bin/activate
+          cd ../${{ inputs.working-directory }}
+          
+          # Run the measurement and capture output
+          echo "Running command: ${{ inputs.command }}"
+          output=$(../cli/venv/bin/green-ci measure -- ${{ inputs.command }})
+          echo "Measurement output: $output"
+          
+          # Parse JSON output
+          energy_kwh=$(echo "$output" | jq -r '.energy_kwh')
+          co2_kg=$(echo "$output" | jq -r '.co2_kg')
+          duration_s=$(echo "$output" | jq -r '.duration_s')
+          
+          # Set outputs
+          echo "energy_kwh=$energy_kwh" >> $GITHUB_OUTPUT
+          echo "co2_kg=$co2_kg" >> $GITHUB_OUTPUT
+          echo "duration_s=$duration_s" >> $GITHUB_OUTPUT
+          
+          # Create green-ci.json artifact
+          echo "$output" > green-ci.json
+          
+      - name: Upload measurement results
+        uses: actions/upload-artifact@v4
+        with:
+          name: green-ci-results
+          path: green-ci.json
+          retention-days: 30
+          
+      - name: Display results
+        run: |
+          echo "## Green CI Measurement Results" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Energy Consumption | ${{ steps.measure.outputs.energy_kwh }} kWh |" >> $GITHUB_STEP_SUMMARY
+          echo "| CO2 Emissions | ${{ steps.measure.outputs.co2_kg }} kg |" >> $GITHUB_STEP_SUMMARY
+          echo "| Duration | ${{ steps.measure.outputs.duration_s }} seconds |" >> $GITHUB_STEP_SUMMARY

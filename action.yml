@@ -1,0 +1,171 @@
+name: 'Green CI Measure'
+description: 'Measure energy consumption and CO2 emissions of CI/CD commands'
+author: 'EcoCI Team'
+
+branding:
+  icon: 'zap'
+  color: 'green'
+
+inputs:
+  command:
+    description: 'Command to measure energy consumption and CO2 emissions'
+    required: true
+  working-directory:
+    description: 'Working directory to run the command in'
+    required: false
+    default: '.'
+  python-version:
+    description: 'Python version to use for Green CI'
+    required: false
+    default: '3.11'
+  badge:
+    description: 'Generate badge for energy/CO2 metrics (true/false)'
+    required: false
+    default: 'false'
+  token:
+    description: 'GitHub token for badge generation and API access'
+    required: false
+  electricity-maps-api-key:
+    description: 'API key for Electricity Maps to get accurate carbon intensity'
+    required: false
+
+outputs:
+  energy_kwh:
+    description: 'Energy consumption in kilowatt-hours'
+    value: ${{ steps.measure.outputs.energy_kwh }}
+  co2_kg:
+    description: 'CO2 emissions in kilograms'
+    value: ${{ steps.measure.outputs.co2_kg }}
+  duration_s:
+    description: 'Command execution duration in seconds'
+    value: ${{ steps.measure.outputs.duration_s }}
+  json_output:
+    description: 'Full JSON output from measurement'
+    value: ${{ steps.measure.outputs.json_output }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Validate inputs
+      shell: bash
+      run: |
+        if [ -z "${{ inputs.command }}" ]; then
+          echo "::error::Command input is required"
+          exit 1
+        fi
+        
+        # Validate badge input
+        if [[ "${{ inputs.badge }}" != "true" && "${{ inputs.badge }}" != "false" ]]; then
+          echo "::error::Badge input must be 'true' or 'false'"
+          exit 1
+        fi
+        
+        # Check if token is required for badge generation
+        if [[ "${{ inputs.badge }}" == "true" && -z "${{ inputs.token }}" ]]; then
+          echo "::error::Token is required when badge=true"
+          exit 1
+        fi
+        
+        echo "✅ Input validation passed"
+        
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ inputs.python-version }}
+        
+    - name: Install Green CI
+      shell: bash
+      run: |
+        echo "Installing Green CI CLI..."
+        cd ${{ github.action_path }}/cli
+        
+        python -m venv venv
+        source venv/bin/activate
+        
+        pip install --upgrade pip
+        pip install -e .
+        
+        echo "✅ Green CI CLI installed successfully"
+        
+    - name: Run energy measurement
+      id: measure
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        ELECTRICITY_MAPS_API_KEY: ${{ inputs.electricity-maps-api-key }}
+      run: |
+        echo "Running Green CI measurement..."
+        echo "Command: ${{ inputs.command }}"
+        echo "Working directory: ${{ inputs.working-directory }}"
+        
+        # Set up path to green-ci executable
+        GREEN_CI_PATH="${{ github.action_path }}/cli/venv/bin/green-ci"
+        
+        # Run the measurement and capture output
+        echo "Executing measurement..."
+        json_output=$($GREEN_CI_PATH measure -- ${{ inputs.command }})
+        exit_code=$?
+        
+        if [ $exit_code -ne 0 ]; then
+          echo "::error::Green CI measurement failed with exit code $exit_code"
+          exit $exit_code
+        fi
+        
+        echo "Raw output: $json_output"
+        
+        # Parse JSON output
+        energy_kwh=$(echo "$json_output" | jq -r '.energy_kwh')
+        co2_kg=$(echo "$json_output" | jq -r '.co2_kg')
+        duration_s=$(echo "$json_output" | jq -r '.duration_s')
+        
+        # Validate parsed values
+        if [[ "$energy_kwh" == "null" || "$co2_kg" == "null" || "$duration_s" == "null" ]]; then
+          echo "::error::Failed to parse measurement results from JSON output"
+          exit 1
+        fi
+        
+        # Set outputs
+        echo "energy_kwh=$energy_kwh" >> $GITHUB_OUTPUT
+        echo "co2_kg=$co2_kg" >> $GITHUB_OUTPUT
+        echo "duration_s=$duration_s" >> $GITHUB_OUTPUT
+        echo "json_output=$json_output" >> $GITHUB_OUTPUT
+        
+        # Save to artifact file
+        echo "$json_output" > green-ci.json
+        
+        echo "✅ Measurement completed successfully"
+        echo "Energy: ${energy_kwh} kWh"
+        echo "CO2: ${co2_kg} kg"
+        echo "Duration: ${duration_s} seconds"
+        
+    - name: Upload measurement artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: green-ci-measurement
+        path: green-ci.json
+        retention-days: 30
+        
+    - name: Generate summary
+      shell: bash
+      run: |
+        echo "## 🌱 Green CI Measurement Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+        echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY
+        echo "| ⚡ Energy Consumption | ${{ steps.measure.outputs.energy_kwh }} kWh |" >> $GITHUB_STEP_SUMMARY
+        echo "| 🌍 CO2 Emissions | ${{ steps.measure.outputs.co2_kg }} kg |" >> $GITHUB_STEP_SUMMARY
+        echo "| ⏱️ Duration | ${{ steps.measure.outputs.duration_s }} seconds |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Command:** \`${{ inputs.command }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "📁 Measurement data has been uploaded as an artifact named \`green-ci-measurement\`" >> $GITHUB_STEP_SUMMARY
+        
+    - name: Generate badge (if enabled)
+      if: inputs.badge == 'true'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+      run: |
+        echo "🏷️ Badge generation is enabled but not yet implemented"
+        echo "This feature will be implemented in a future version"
+        echo "Token validation: ${{ inputs.token != '' && 'OK' || 'MISSING' }}"

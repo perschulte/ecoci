@@ -1,0 +1,1 @@
+"""Tests for green-ci CLI tool."""

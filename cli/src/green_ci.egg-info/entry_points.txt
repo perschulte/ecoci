@@ -1,0 +1,2 @@
+[console_scripts]
+green-ci = green_ci.cli:main

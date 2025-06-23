@@ -1,0 +1,44 @@
+name: Test Green CI Action
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_command:
+        description: 'Command to test'
+        required: false
+        default: 'echo "Hello Green CI"'
+
+jobs:
+  test-action:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Test Green CI Action
+        id: green-ci
+        uses: ./
+        with:
+          command: ${{ github.event.inputs.test_command || 'echo "Hello Green CI"' }}
+          working-directory: '.'
+          python-version: '3.11'
+          badge: 'false'
+          
+      - name: Display Results
+        run: |
+          echo "Energy consumption: ${{ steps.green-ci.outputs.energy_kwh }} kWh"
+          echo "CO2 emissions: ${{ steps.green-ci.outputs.co2_kg }} kg"
+          echo "Duration: ${{ steps.green-ci.outputs.duration_s }} seconds"
+          echo "JSON output: ${{ steps.green-ci.outputs.json_output }}"
+          
+      - name: Validate Output
+        run: |
+          # Check that outputs are valid numbers
+          echo "${{ steps.green-ci.outputs.energy_kwh }}" | grep -E '^[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?$'
+          echo "${{ steps.green-ci.outputs.co2_kg }}" | grep -E '^[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?$'
+          echo "${{ steps.green-ci.outputs.duration_s }}" | grep -E '^[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?$'
+          
+          # Check that JSON is valid
+          echo '${{ steps.green-ci.outputs.json_output }}' | jq .
+          
+          echo "✅ All outputs are valid!"
