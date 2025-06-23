@@ -91,7 +91,7 @@ jobs:
           output: 'trivy-results-auth-api.sarif'
 
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
           sarif_file: 'trivy-results-auth-api.sarif'
@@ -154,7 +154,7 @@ jobs:
           output: 'trivy-results-badge-service.sarif'
 
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
           sarif_file: 'trivy-results-badge-service.sarif'
