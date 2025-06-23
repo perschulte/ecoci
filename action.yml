@@ -145,7 +145,7 @@ runs:
     - name: Upload measurement artifact
       uses: actions/upload-artifact@v4
       with:
-        name: green-ci-measurement
+        name: green-ci-measurement-${{ github.run_id }}-${{ github.run_attempt }}
         path: green-ci.json
         retention-days: 30
         
