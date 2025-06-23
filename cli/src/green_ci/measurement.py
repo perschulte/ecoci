@@ -37,11 +37,12 @@ class MeasurementResult:
         
         Returns:
             Dictionary with energy_kwh, co2_kg, and duration_s keys.
+            Uses fixed-point notation to avoid scientific notation parsing issues.
         """
         return {
-            "energy_kwh": self.energy_kwh,
-            "co2_kg": self.co2_kg,
-            "duration_s": self.duration_s
+            "energy_kwh": round(self.energy_kwh, 8),
+            "co2_kg": round(self.co2_kg, 8), 
+            "duration_s": round(self.duration_s, 6)
         }
 
 

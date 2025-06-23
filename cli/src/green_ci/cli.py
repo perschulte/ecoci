@@ -45,8 +45,19 @@ def measure(command: List[str]) -> None:
         # Validate output against schema
         validate_measurement_output(output_data)
         
-        # Output JSON to stdout
-        json_output = json.dumps(output_data)
+        # Format as strings to avoid scientific notation in JSON
+        formatted_data = {
+            "energy_kwh": f"{output_data['energy_kwh']:.8f}".rstrip('0').rstrip('.'),
+            "co2_kg": f"{output_data['co2_kg']:.8f}".rstrip('0').rstrip('.'), 
+            "duration_s": f"{output_data['duration_s']:.6f}".rstrip('0').rstrip('.')
+        }
+        
+        # Manual JSON construction to control number formatting
+        json_parts = []
+        for key, value in formatted_data.items():
+            json_parts.append(f'"{key}": {value}')
+        
+        json_output = "{" + ", ".join(json_parts) + "}"
         click.echo(json_output)
         
         # Exit with code 0 on success
